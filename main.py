@@ -12,17 +12,18 @@ client = discord.Client(intents=intents)
 # Server IP
 IP = "165.227.201.231"
 # Channel ID of the message to edit. For #server-status, this should be 594776724231684097
-CHANNEL_ID = 1082044825672626306
+CHANNEL_ID = 594776724231684097
 # Message ID of the message to edit.
 # This should be 778718106935492639 for the current Server Status bot.
-# Set it to -1 if using the last bot message in the channel.
 MESSAGE_ID = -1
+# Set it to -1 if using the last bot message in the channel.
 # Offline message - dunno if it's the right boop
 OFFLINE_MSG = "Have an emergency boop <:boop:647192998010159134>"
 # Make a token.txt file in the same directory and then paste the Discord bot token in.
 # It's best not to have token in code. Safety and all that
 with open("token.txt", "r") as fin:
     token = fin.readline().replace('\n', '')
+# Note: Bot required permissions integer = 355328. Manage Messages for editing.
 
 
 @tasks.loop(seconds=60)
@@ -53,15 +54,17 @@ async def send_message():
 **Players**: {usersConnStr}"""
         # The message content
         content = f"**{status.description}**"
+        colour = 0x7289DA
 
     except socket.timeout or gaierror or ConnectionRefusedError:
         print("The server is offline!")
         title = "Status: Offline"
         content = f"**SERVER OFFLINE**"
         description = OFFLINE_MSG
+        colour = 0xe74c3c # Some shade of red
 
     # Build embed
-    embed = discord.Embed(title=title, description=description, colour=0x7289DA)
+    embed = discord.Embed(title=title, description=description, colour=colour)
     embed.set_footer(text=f"{IP} | {timeStr}")
 
     try:
@@ -73,15 +76,20 @@ async def send_message():
         # Message probably deleted
         await get_message()
         await send_message()
+    except discord.errors.Forbidden:
+        print("Message editing is forbidden!")
     except Exception as e:
         print(f"Editing failed due to {e}.")
 
 
 async def get_message():
     global MESSAGE_ID
-    channel = client.get_channel(CHANNEL_ID)
 
-    bot_message = await discord.utils.get(channel.history(limit=100), author=client.user)
+    try:
+        channel = client.get_channel(CHANNEL_ID)
+        bot_message = await discord.utils.get(channel.history(limit=100), author=client.user)
+    except AttributeError:
+        print(f"Bot can not view the channel (history)!")
 
     if bot_message is not None:
         MESSAGE_ID = bot_message.id
@@ -92,7 +100,7 @@ async def get_message():
             MESSAGE_ID = message.id
         except Exception as e:
             print(f"Sending new message failed due to {e}")
-            # No point in doing anything
+            # No point in doing anything...
             client.loop.stop()
             sys.exit()
 

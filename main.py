@@ -13,8 +13,8 @@ client = discord.Client(intents=intents)
 IP = "165.227.201.231"
 # Channel ID of the message to edit. For #server-status, this should be 594776724231684097
 CHANNEL_ID = 594776724231684097
+ERROR_CHANNEL_ID = 596576559427747840
 # Message ID of the message to edit.
-# This should be 778718106935492639 for the current Server Status bot.
 MESSAGE_ID = -1
 # Set it to -1 if using the last bot message in the channel.
 # Offline message - dunno if it's the right boop
@@ -46,22 +46,23 @@ async def send_message():
         if status.raw['players']['online'] == 0:
             usersConnStr = ""
         else:
-            usersConnected = [user['name'] for user in status.raw['players']['sample']]
+            # Escape underscores
+            usersConnected = [user['name'].replace('_', '\_') for user in status.raw['players']['sample']]
             usersConnStr = '\n- ' + '\n- '.join(usersConnected)
         # Embed description
         description = f"""**Currently online**: {status.players.online}/{status.players.max} ponies
 **Version**: {status.version.name}
 **Players**: {usersConnStr}"""
         # The message content
-        content = f"**{status.description}**"
-        colour = 0x7289DA
+        content = f"**{status.description}**"  # Server MOTD as message content
+        colour = 0x7289DA  # Some shade of blue
 
     except socket.timeout or gaierror or ConnectionRefusedError:
         print("The server is offline!")
         title = "Status: Offline"
         content = f"**SERVER OFFLINE**"
         description = OFFLINE_MSG
-        colour = 0xe74c3c # Some shade of red
+        colour = 0xe74c3c  # Some shade of red
 
     # Build embed
     embed = discord.Embed(title=title, description=description, colour=colour)
@@ -77,9 +78,9 @@ async def send_message():
         await get_message()
         await send_message()
     except discord.errors.Forbidden:
-        print("Message editing is forbidden!")
+        await sendErrorMessage(client, "Error: Bot does not have permissions to edit messages.")
     except Exception as e:
-        print(f"Editing failed due to {e}.")
+        await sendErrorMessage(client, f"Editing failed due to {e}.")
 
 
 async def get_message():
@@ -89,7 +90,7 @@ async def get_message():
         channel = client.get_channel(CHANNEL_ID)
         bot_message = await discord.utils.get(channel.history(limit=100), author=client.user)
     except AttributeError:
-        print(f"Bot can not view the channel (history)!")
+        await sendErrorMessage(client, f"Bot can not view the channel (history)!")
 
     if bot_message is not None:
         MESSAGE_ID = bot_message.id
@@ -99,10 +100,20 @@ async def get_message():
             message = await channel.send("Getting server info...")
             MESSAGE_ID = message.id
         except Exception as e:
-            print(f"Sending new message failed due to {e}")
+            await sendErrorMessage(client, f"Sending new message failed due to {e}")
             # No point in doing anything...
             client.loop.stop()
             sys.exit()
+
+
+async def sendErrorMessage(client, errMsg):
+    try:
+        errorChannel = await client.get_channel(ERROR_CHANNEL_ID)
+        await errorChannel.send(errMsg)
+    except Exception as e:
+        print(f"Error sending error message due to {e}!")
+    finally:
+        print(errMsg)
 
 
 @client.event

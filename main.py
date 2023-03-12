@@ -1,9 +1,11 @@
 import discord
 from discord.ext import tasks
-from mcstatus import JavaServer
+from mcstatus import JavaServer, dns
 from datetime import datetime  # For timezone stuff
 import pytz  # For timezone stuff
-import socket, sys
+import socket
+import sys
+import traceback
 from _socket import gaierror
 
 intents = discord.Intents.default()
@@ -27,7 +29,17 @@ with open("token.txt", "r") as fin:
 
 
 @tasks.loop(seconds=60)
-async def send_message():
+async def update():
+    # Wrapper to send an error message every time something goes wrong that is not retryable
+    try:
+        await _update()
+    except Exception as e:
+        s = traceback.format_exc()
+        await sendErrorMessage(f"<@!523717630972919809>\n{s}")
+        await stop()
+
+
+async def _update():
     # Time
     local = pytz.timezone('US/Eastern')
     now = datetime.now()
@@ -44,10 +56,14 @@ async def send_message():
         title = "Status: Online"
         # Players online
         if status.raw['players']['online'] == 0:
-            usersConnStr = ""
+            usersConnStr = "nopony is online! <:phyllisno:633069063408451584>"
         else:
             # Escape underscores
-            usersConnected = [user['name'].replace('_', '\_') for user in status.raw['players']['sample']]
+            try:
+                usersConnected = [user['name'].replace('_', '\\_') for user in status.raw['players']['sample']]
+            except KeyError:
+                print("Experienced key error!")
+                print(status.raw['players'])
             usersConnStr = '\n- ' + '\n- '.join(usersConnected)
         # Embed description
         description = f"""**Currently online**: {status.players.online}/{status.players.max} ponies
@@ -57,7 +73,7 @@ async def send_message():
         content = f"**{status.description}**"  # Server MOTD as message content
         colour = 0x7289DA  # Some shade of blue
 
-    except socket.timeout or gaierror or ConnectionRefusedError:
+    except socket.timeout or gaierror or ConnectionRefusedError or dns.resolver.LifetimeTimeout:
         print("The server is offline!")
         title = "Status: Offline"
         content = f"**SERVER OFFLINE**"
@@ -76,11 +92,11 @@ async def send_message():
     except discord.errors.NotFound:
         # Message probably deleted
         await get_message()
-        await send_message()
+        await _update()
     except discord.errors.Forbidden:
-        await sendErrorMessage(client, "Error: Bot does not have permissions to edit messages.")
+        await sendErrorMessage("Error: Bot does not have permissions to edit messages.")
     except Exception as e:
-        await sendErrorMessage(client, f"Editing failed due to {e}.")
+        await sendErrorMessage(f"Editing failed due to {e}.")
 
 
 async def get_message():
@@ -102,18 +118,22 @@ async def get_message():
         except Exception as e:
             await sendErrorMessage(client, f"Sending new message failed due to {e}")
             # No point in doing anything...
-            client.loop.stop()
-            sys.exit()
+            await stop()
 
 
-async def sendErrorMessage(client, errMsg):
+async def sendErrorMessage(errMsg):
     try:
-        errorChannel = await client.get_channel(ERROR_CHANNEL_ID)
+        errorChannel = client.get_channel(ERROR_CHANNEL_ID)
         await errorChannel.send(errMsg)
     except Exception as e:
         print(f"Error sending error message due to {e}!")
     finally:
         print(errMsg)
+
+
+async def stop():
+    client.loop.stop()
+    sys.exit()
 
 
 @client.event
@@ -124,7 +144,7 @@ async def on_ready():
     if MESSAGE_ID == -1:
         await get_message()
 
-    send_message.start()
+    update.start()
 
 
 if __name__ == '__main__':

@@ -56,15 +56,16 @@ async def _update():
         title = "Status: Online"
         # Players online
         if status.raw['players']['online'] == 0:
-            usersConnStr = "nopony is online! <:phyllisno:633069063408451584>"
+            usersConnStr = "Nopony is online! <:phyllisno:633069063408451584>"
         else:
-            # Escape underscores
+            usersConnStr = ""
             try:
+                # Escape underscores
                 usersConnected = [user['name'].replace('_', '\\_') for user in status.raw['players']['sample']]
+                usersConnStr = '\n- ' + '\n- '.join(usersConnected)
             except KeyError:
-                print("Experienced key error!")
+                print("No usernames were given even though players are online!")
                 print(status.raw['players'])
-            usersConnStr = '\n- ' + '\n- '.join(usersConnected)
         # Embed description
         description = f"""**Currently online**: {status.players.online}/{status.players.max} ponies
 **Version**: {status.version.name}
@@ -102,11 +103,16 @@ async def _update():
 async def get_message():
     global MESSAGE_ID
 
+    bot_message = None
+    channel = client.get_channel(CHANNEL_ID)
+    if channel is None:
+        print(f"Invalid channel!")
+        await stop()
+
     try:
-        channel = client.get_channel(CHANNEL_ID)
         bot_message = await discord.utils.get(channel.history(limit=100), author=client.user)
     except AttributeError:
-        await sendErrorMessage(client, f"Bot can not view the channel (history)!")
+        await sendErrorMessage(f"Bot can not view the channel (history)!")
 
     if bot_message is not None:
         MESSAGE_ID = bot_message.id
@@ -132,7 +138,7 @@ async def sendErrorMessage(errMsg):
 
 
 async def stop():
-    client.loop.stop()
+    await client.close()
     sys.exit()
 
 

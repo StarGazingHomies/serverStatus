@@ -11,11 +11,13 @@ from _socket import gaierror
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 
-# Server IP
-IP = "165.227.201.231"
-# Channel ID of the message to edit. For #server-status, this should be 594776724231684097
-CHANNEL_ID = 594776724231684097
-ERROR_CHANNEL_ID = 596576559427747840
+with open("config.txt", "r") as fin:
+    # Server IP
+    IP = fin.readline().replace("\n", "")
+    # Channel ID of the message to edit. For #server-status, this should be 594776724231684097
+    CHANNEL_ID = int(fin.readline())
+    ERROR_CHANNEL_ID = int(fin.readline())
+
 # Message ID of the message to edit.
 MESSAGE_ID = -1
 # Set it to -1 if using the last bot message in the channel.
@@ -25,6 +27,8 @@ OFFLINE_MSG = "Have an emergency boop <:boop:647192998010159134>"
 # It's best not to have token in code. Safety and all that
 with open("token.txt", "r") as fin:
     token = fin.readline().replace('\n', '')
+
+
 # Note: Bot required permissions integer = 355328. Manage Messages for editing.
 
 
@@ -66,15 +70,24 @@ async def _update():
             except KeyError:
                 print("No usernames were given even though players are online!")
                 print(status.raw['players'])
+
         # Embed description
         description = f"""**Currently online**: {status.players.online}/{status.players.max} ponies
 **Version**: {status.version.name}
 **Players**: {usersConnStr}"""
         # The message content
-        content = f"**{status.description}**"  # Server MOTD as message content
+        content = f"**{status.description}**\n"  # Server MOTD as message content
         colour = 0x7289DA  # Some shade of blue
 
-    except socket.timeout or gaierror or ConnectionRefusedError or dns.resolver.LifetimeTimeout:
+        # Crude "check if it's waterfall and not actually the server because it's down"
+        if status.players.max == 1:
+            print("The server is offline (behind Waterfall)!")
+            title = "Status: Offline (behind Waterfall)"
+            content = f"**SERVER OFFLINE**"
+            description = OFFLINE_MSG
+            colour = 0xe74c3c
+
+    except (socket.timeout, gaierror, ConnectionRefusedError):
         print("The server is offline!")
         title = "Status: Offline"
         content = f"**SERVER OFFLINE**"
